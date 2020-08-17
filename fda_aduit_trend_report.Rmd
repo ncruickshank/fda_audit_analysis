@@ -11,10 +11,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r load libraries, message=FALSE, warning=FALSE}
 library(forcats)
+library(lubridate)
 library(readxl)
 library(tidyverse)
 library(scales)
-library(usmap)
 ```
 
 ```{r load data}
@@ -236,6 +236,27 @@ classifications %>%
   )
 ```
 
-
-
 Where are most drug inspections performed? Which state has the most drug companies? Make a heatmap of drug manufacturer's per capita.
+
+## Citation Exploration
+
+```{r}
+citations %>%
+  filter(`Program Area` == "Drugs",
+         `Country/Area` == "United States") %>%
+  group_by(`Firm Name`) %>%
+  dplyr::summarise(
+    Observations = n(),
+    Inspections = n_distinct(`Inspection End Date`),
+    `Obs per Insp` = round(Observations / Inspections)
+  ) %>%
+  arrange(desc(`Obs per Insp`))
+```
+
+Can you merge citations and classifications?
+
+```{r}
+classifications %>%
+  left_join(citations)
+```
+
