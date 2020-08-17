@@ -1,0 +1,239 @@
+---
+title: "FDA Audit Analysis"
+author: "Nick Cruickshank"
+date: "8/15/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries, message=FALSE, warning=FALSE}
+library(forcats)
+library(readxl)
+library(tidyverse)
+library(scales)
+library(usmap)
+```
+
+```{r load data}
+classifications <- read_excel("Inspection_Classification_(10-1-2008_through_7-22-2020).xlsx", 
+    col_types = c("text", "text", "text", 
+        "text", "text", "text", "date", "text", 
+        "text", "text"))
+
+citations <- read_excel("Inspection_Citation_(10-1-2008_through_7-22-2020)_0.xlsx", 
+    col_types = c("text", "text", "text", 
+        "text", "date", "text", "text", "text", 
+        "text"))
+
+drug_obs <- read_csv("fda_drug_observation.csv", 
+    col_types = cols(`Cite Id` = col_character()))
+
+
+```
+
+# Description of Datasets
+
+## Classifications
+
+A dataset of all project areas inspected by the FDA between 10-01-2008 and 07-22-2020 categorized by classification.
+
+```{r}
+observations %>%
+  head(10)
+```
+
+
+Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-classification-database
+Info on Columns: https://www.accessdata.fda.gov/scripts/inspsearch/searchfields.cfm
+Key for Districts: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/compliance-actions-and-activities/district-names-and-abbreviations
+
+
+No. | Column Name         | Class | Description
+----|---------------------|-------|-------------
+01  | District            | chr   | District where company resides
+02  | Legal Name          | chr   | Name of the company inspected.
+03  | City                | chr   | City the company is located in.
+04  | State               | chr   | Abbreviation for the state the company is located in
+05  | Zip                 | chr   | Zip code for company address
+06  | County/Area         | chr   | State the company is based in.
+07  | Inspection End Date | date  | Date the inspection was concluded
+08  | Center              | chr   | Sub-department of the FDA.
+09  | Project Area        | chr   | Categorized by corresponding center.
+10  | Classification      | chr   | Inspection classification with regards to compliance status
+
+Centers include the following: 
+ - CFSAN: Center for Food Safety and Applied Nutrition
+ - CBER: Center for Biologics Evaluation and Research
+ - CDER: Center for Drug Evaluation and Radiological Health
+ - CVM: Center for Veterinary Medicine
+ - CDRH: Office of Regulatory Affairs
+ - CTP: Center for Tobacco Product(s)
+
+Classifications include the following:
+ - NAI: No Action Indicated
+ - VAI: Voluntary Action Indicated
+ - OAI: Official Action Indicated
+
+## Citations
+
+Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspection-citation
+
+A data set of all citations given by the FDA during audits generated from FDA Form 483 between 10-01-2008 and 07-22-2008.
+
+```{r}
+citations %>%
+  head(10)
+```
+
+## Drug Observations
+
+A section of the Inspections Observations data sheet strictly related to Drug Products. Lists the frequency of all given observations.
+
+```{r}
+drug_obs %>%
+  head(10)
+```
+
+Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspection-observations
+More Info: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspectional-observations-and-citations
+
+No. | Column Name           | Class | Description
+----|-----------------------|-------|-------------
+01  | Citation Program Area | chr   | 
+02  | Cire Id               | chr   | 
+03  | Reference Number      | chr   | 
+04  | Short Description     | chr   | 
+05  | Long Description      | chr   | 
+06  | Frequency             | dbl   | 
+
+# Exploratory Analysis
+
+What proportion of FDA Inspections in 2019 were Center for Drug Evaluation and Radiological Health?
+
+```{r}
+blank_theme <- theme_minimal() + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.border = element_blank(),
+    panel.grid = element_blank(),
+    axis.ticks = element_blank(),
+    plot.title = element_text(size = 14, face = "bold")
+  )
+
+classifications %>%
+  group_by(Center) %>%
+  dplyr::summarise(
+    Inspections = n()
+  ) %>%
+  ggplot() + 
+  geom_bar(aes(x = "", y = Inspections, fill = Center), stat = "identity") + 
+  scale_fill_manual(values = c(
+    "CBER" = "grey95",
+    "CDER" = "firebrick",
+    "CDRH" = "grey85",
+    "CFSAN" = "grey75",
+    "CTP" = "grey65",
+    "CVM" = "grey55"
+  )) + 
+  coord_polar("y", start = 0) + 
+  theme_minimal() + 
+  blank_theme +
+  theme(axis.text.x = element_blank())
+```
+
+Of the CDER Inspections, what was the distribution of Inspection Classifications?
+
+```{r}
+classifications %>%
+  filter(Center == "CDER") %>%
+  group_by(Classification) %>%
+  dplyr::summarise(
+    Inspections = n()
+  ) %>%
+  ggplot() + 
+  geom_bar(aes(x = "", y = Inspections, fill = Classification), stat = "identity") + 
+  scale_fill_brewer(palette = "Spectral") + 
+  coord_polar("y", start = 0) + 
+  theme_minimal() + 
+  blank_theme +
+  theme(axis.text.x = element_blank())
+```
+
+What is the distribution of inspections per capita by state? Make a heatmap of America.
+
+```{r}
+classifications %>%
+  filter(Center == "CDER",
+         `Project Area` == "Drug Quality Assurance",
+         !is.na(State)) %>%
+  group_by(State) %>%
+  dplyr::summarise(
+    Inspections = n()
+  ) %>%
+  arrange(desc(Inspections)) %>%
+  plot_usmap(values = Inspections)
+```
+
+What is the distribution of Classifications by State?
+
+What months of the year is the agency most likely to perform an inspection? Make a bar graph with fill = classification. Does this distribution look different in the region which Vermont belongs to?
+
+```{r}
+classifications %>%
+  filter(Center == "CDER",
+         `Project Area` == "Drug Quality Assurance",
+         !is.na(State),
+         District == "NWE") %>%
+  separate(`Inspection End Date`, into = c("year", "month", "day"), sep = "-", remove = FALSE) %>%
+  group_by(month) %>%
+  dplyr::summarise(
+    count = n(),
+    NAI = sum(Classification == "NAI"),
+    VAI = sum(Classification == "VAI"),
+    OAI = sum(Classification == "OAI"),
+  ) %>%
+  mutate(month_abr = case_when(
+    month == "01" ~ "Jan",
+    month == "02" ~ "Feb",
+    month == "03" ~ "Mar",
+    month == "04" ~ "Apr",
+    month == "05" ~ "May",
+    month == "06" ~ "Jun",
+    month == "07" ~ "Jul",
+    month == "08" ~ "Aug",
+    month == "09" ~ "Sep",
+    month == "10" ~ "Oct",
+    month == "11" ~ "Nov",
+    month == "12" ~ "Dec"
+  )) %>%
+  pivot_longer(cols = c(NAI, VAI, OAI), names_to = "Classification", values_to = "Inspections") %>%
+  mutate(class_sev = case_when(
+    Classification == "NAI" ~ 1,
+    Classification == "VAI" ~ 2,
+    Classification == "OAI" ~ 3)) %>%
+  rename(c(
+    "m1" = "month",
+    "Month" = "month_abr"
+  )) %>%
+  ggplot(aes(fct_reorder(Month, m1), Inspections)) + 
+  geom_bar(aes(fill = fct_reorder(Classification, desc(class_sev))), stat = "identity") + 
+  scale_fill_brewer(palette = "YlOrRd", direction = -1) + 
+  labs(
+    title = "FDA Audits in the New England Area are less frequent in the summer",
+    subtitle = "Classification of 'Offical Action Indicated' most common in March and August",
+    x = "Month",
+    y = "Number of Inspections",
+    fill = "Classification",
+    caption = "Source: fda.gov"
+  ) + 
+  theme_bw() + 
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+Where are most drug inspections performed? Which state has the most drug companies? Make a heatmap of drug manufacturer's per capita.
