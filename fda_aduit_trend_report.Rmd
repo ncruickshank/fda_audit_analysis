@@ -236,4 +236,6 @@ classifications %>%
   )
 ```
 
+
+
 Where are most drug inspections performed? Which state has the most drug companies? Make a heatmap of drug manufacturer's per capita.
