@@ -12,9 +12,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r load libraries, message=FALSE, warning=FALSE}
 library(forcats)
 library(lubridate)
+library(qdapRegex)
+library(readr)
 library(readxl)
 library(tidyverse)
 library(scales)
+library(stringr)
 ```
 
 ```{r load data}
@@ -31,7 +34,9 @@ citations <- read_excel("Inspection_Citation_(10-1-2008_through_7-22-2020)_0.xls
 drug_obs <- read_csv("fda_drug_observation.csv", 
     col_types = cols(`Cite Id` = col_character()))
 
-
+list_503b <- read_csv("list_503b.csv", col_types = cols(current_outsourcing_registration_date = col_date(format = "%m/%d/%Y"), 
+    date_last_inspection = col_date(format = "%m/%d/%Y"), 
+    initial_outsourcing_registration_date = col_date(format = "%m/%d/%Y")))
 ```
 
 # Description of Datasets
@@ -41,7 +46,7 @@ drug_obs <- read_csv("fda_drug_observation.csv",
 A dataset of all project areas inspected by the FDA between 10-01-2008 and 07-22-2020 categorized by classification.
 
 ```{r}
-observations %>%
+classifications %>%
   head(10)
 ```
 
@@ -86,6 +91,15 @@ A data set of all citations given by the FDA during audits generated from FDA Fo
 ```{r}
 citations %>%
   head(10)
+```
+
+## List of 503B Outsourcing Pharmaceutical Companies
+
+Source: https://www.fda.gov/drugs/human-drug-compounding/registered-outsourcing-facilities
+
+```{r}
+list_503b %>%
+  head()
 ```
 
 ## Drug Observations
@@ -147,22 +161,6 @@ classifications %>%
 
 Of the CDER Inspections, what was the distribution of Inspection Classifications?
 
-```{r}
-classifications %>%
-  filter(Center == "CDER") %>%
-  group_by(Classification) %>%
-  dplyr::summarise(
-    Inspections = n()
-  ) %>%
-  ggplot() + 
-  geom_bar(aes(x = "", y = Inspections, fill = Classification), stat = "identity") + 
-  scale_fill_brewer(palette = "Spectral") + 
-  coord_polar("y", start = 0) + 
-  theme_minimal() + 
-  blank_theme +
-  theme(axis.text.x = element_blank())
-```
-
 What is the distribution of inspections per capita by state? Make a heatmap of America.
 
 ```{r}
@@ -173,9 +171,7 @@ classifications %>%
   group_by(State) %>%
   dplyr::summarise(
     Inspections = n()
-  ) %>%
-  arrange(desc(Inspections)) %>%
-  plot_usmap(values = Inspections)
+  )
 ```
 
 What is the distribution of Classifications by State?
@@ -239,6 +235,37 @@ classifications %>%
 Where are most drug inspections performed? Which state has the most drug companies? Make a heatmap of drug manufacturer's per capita.
 
 ## Citation Exploration
+
+Merge Citations and List of 503B Companies
+
+```{r tidy data, message=FALSE, warning=FALSE}
+# tidy list_503b
+tidy_503b <- list_503b %>%
+  mutate(facility = gsub("[,]? (LLC|Inc)[\\.]?[,]?", ",", `Facility Name`)) %>%
+  mutate(facility = gsub("[,]? (formerly|dba|DBA|d/b/a|dba:) ", " formerly ", facility)) %>%
+  mutate(facility = gsub("355 Riverwalk Pkwy, ", "", facility)) %>%
+  mutate(facility = gsub(", ((NSCC)), ", "", facility)) %>%
+  separate(facility, into = c("name", "city", "state"), sep = ", ", remove = FALSE) %>%
+  filter(!is.na(state),
+         city != "(NSCC)",
+         name != "STERRX") %>%
+  separate(name, into = c("facility_name", "Formerly Name"), sep = " formerly ", remove = TRUE) %>%
+  mutate(`Formerly Name` = gsub("registered as ", "", `Formerly Name`)) %>%
+  separate(`Formerly Name`, into = c("Former Name", "c1", "s1"), sep = ", ", remove = FALSE) %>%
+  select(`facility_name`, `Former Name`, city, state, initial_outsourcing_registration_date, current_outsourcing_registration_date,
+         date_last_inspection, form483_issued, other_action, intent_to_compound_from_bulk_drug_substance) %>%
+  rename(c(
+    "Facility Name" = "facility_name",
+    "City" = "city",
+    "State" = "state"
+  ))
+
+citations %>%
+  filter(`Program Area` == "Drugs") %>%
+  mutate(`Facility Name` = gsub("[,]? (LLC|Inc|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", "", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  merge(tidy_503b) # this merge doesn't seem to fully work
+```
+
 
 ```{r}
 citations %>%
