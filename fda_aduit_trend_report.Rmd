@@ -260,11 +260,27 @@ tidy_503b <- list_503b %>%
     "State" = "state"
   ))
 
+tidy_503b %>%
+  filter(grepl('Edge', `Facility Name`))
+
 citations %>%
   filter(`Program Area` == "Drugs") %>%
-  mutate(`Facility Name` = gsub("[,]? (LLC|Inc|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", "", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
-  merge(tidy_503b) # this merge doesn't seem to fully work
+  mutate(`Facility Name` = gsub("[,]? (LLC|Inc|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  mutate(`Facility Name` = trimws(`Facility Name`, which = "right")) %>%
+  #filter(grepl('Edge', `Facility Name`), State == "VT") %>%
+  #select(`Firm Name`, `Facility Name`) %>%
+  merge(tidy_503b) %>%
+  distinct(`Facility Name`) %>%
+  arrange(`Facility Name`)
 ```
+
+```{r}
+tidy_503b %>%
+  filter(!is.na(date_last_inspection)) %>%
+  distinct(`Facility Name`) %>%
+  arrange(`Facility Name`)
+```
+
 
 
 ```{r}
