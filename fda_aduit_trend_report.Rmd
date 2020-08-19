@@ -266,6 +266,7 @@ tidy_503b <- list_503b %>%
   pivot_longer(cols = c("Current Name", "Former Name"), names_to = "Name Status", values_to = "Facility Name")
 
 tidy_503b <- tidy_503b[complete.cases(tidy_503b), ]
+tidy_503b$`Compounding Outsourcing Facility` = "Yes"
 
 cite_503b <- citations %>%
   filter(`Program Area` == "Drugs") %>%
@@ -279,36 +280,37 @@ cite_503b <- citations %>%
          `CFR/Act Number`, `Short Description`, `Long Description`, `Name Status.x`,
          initial_outsourcing_registration_date, current_outsourcing_registration_date, date_last_inspection,
          form483_issued, other_action, intent_to_compound_from_bulk_drug_substance)
-```
 
-```{r}
-tidy_503b %>%
-  filter(!is.na(date_last_inspection)) #%>%
-  distinct(`Facility Name`) %>%
-  arrange(`Facility Name`)
-```
-
-```{r}
-citations %>%
-  filter(grepl('Stokes', `Firm Name`),
-         State == "NY")
-  filter(City == "Birmingham",
-         State == "AL",
-         `Program Area` == "Drugs")
-```
-
-
-```{r}
-citations %>%
+true_503B <- citations %>%
   filter(`Program Area` == "Drugs",
          `Country/Area` == "United States") %>%
-  group_by(`Firm Name`) %>%
-  dplyr::summarise(
-    Observations = n(),
-    Inspections = n_distinct(`Inspection End Date`),
-    `Obs per Insp` = round(Observations / Inspections)
-  ) %>%
-  arrange(desc(`Obs per Insp`))
+  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  mutate(fac = trimws(fac, which = "right")) %>%
+  separate(fac, into = c("Current Name", "Former Name"), sep = "\\s(DBA|dba|d/b/a)\\s", remove = FALSE) %>%
+  mutate(`Current Name` = trimws(`Current Name`, which = "right")) %>%
+  pivot_longer(cols = c("Current Name", "Former Name"), names_to = "Name Status", values_to = "Facility Name") %>%
+  semi_join(tidy_503b, by = c("Facility Name", "City", "State")) %>%
+  select(`Facility Name`, City, State, `Country/Area`, `Inspection End Date`, `Program Area`,
+         `CFR/Act Number`, `Short Description`, `Long Description`)
+
+true_503B$`Compounding Outsourcing Facility` = 1
+
+false_503B <- citations %>%
+  filter(`Program Area` == "Drugs",
+         `Country/Area` == "United States") %>%
+  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  mutate(fac = trimws(fac, which = "right")) %>%
+  separate(fac, into = c("Current Name", "Former Name"), sep = "\\s(DBA|dba|d/b/a)\\s", remove = FALSE) %>%
+  mutate(`Current Name` = trimws(`Current Name`, which = "right")) %>%
+  pivot_longer(cols = c("Current Name", "Former Name"), names_to = "Name Status", values_to = "Facility Name") %>%
+  anti_join(tidy_503b, by = c("Facility Name", "City", "State")) %>%
+  select(`Facility Name`, City, State, `Country/Area`, `Inspection End Date`, `Program Area`,
+         `CFR/Act Number`, `Short Description`, `Long Description`)
+
+false_503B <- false_503B[complete.cases(false_503B), ]
+false_503B$`Compounding Outsourcing Facility` = 1
+
+tidy_citations <- rbind(true_503B, false_503B)
 ```
 
 Can you merge citations and classifications?
