@@ -238,6 +238,10 @@ Where are most drug inspections performed? Which state has the most drug compani
 
 Merge Citations and List of 503B Companies
 
+Problems to address:
+ - Citations has a company named "ImprimisRx NJ" while tidy_503B has a company named "Imprimis NJOF". They need to match.
+ - Citations has a company named "Pharmaceutics Labs" while tidy_503B has a company named "Pharamceutic Lab" (no 's' at the end). They need to match.
+
 ```{r tidy data, message=FALSE, warning=FALSE}
 # tidy list_503b
 tidy_503b <- list_503b %>%
@@ -249,38 +253,49 @@ tidy_503b <- list_503b %>%
   filter(!is.na(state),
          city != "(NSCC)",
          name != "STERRX") %>%
-  separate(name, into = c("facility_name", "Formerly Name"), sep = " formerly ", remove = TRUE) %>%
+  separate(name, into = c("Current Name", "Formerly Name"), sep = " formerly ", remove = TRUE) %>%
   mutate(`Formerly Name` = gsub("registered as ", "", `Formerly Name`)) %>%
   separate(`Formerly Name`, into = c("Former Name", "c1", "s1"), sep = ", ", remove = FALSE) %>%
-  select(`facility_name`, `Former Name`, city, state, initial_outsourcing_registration_date, current_outsourcing_registration_date,
+  select(`Current Name`, `Former Name`, city, state, initial_outsourcing_registration_date, current_outsourcing_registration_date,
          date_last_inspection, form483_issued, other_action, intent_to_compound_from_bulk_drug_substance) %>%
   rename(c(
-    "Facility Name" = "facility_name",
+    #"Facility Name" = "Current Name",
     "City" = "city",
     "State" = "state"
-  ))
+  )) %>%
+  pivot_longer(cols = c("Current Name", "Former Name"), names_to = "Name Status", values_to = "Facility Name")
 
-tidy_503b %>%
-  filter(grepl('Edge', `Facility Name`))
+tidy_503b <- tidy_503b[complete.cases(tidy_503b), ]
 
-citations %>%
+cite_503b <- citations %>%
   filter(`Program Area` == "Drugs") %>%
-  mutate(`Facility Name` = gsub("[,]? (LLC|Inc|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
-  mutate(`Facility Name` = trimws(`Facility Name`, which = "right")) %>%
-  #filter(grepl('Edge', `Facility Name`), State == "VT") %>%
-  #select(`Firm Name`, `Facility Name`) %>%
-  merge(tidy_503b) %>%
+  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  mutate(fac = trimws(fac, which = "right")) %>%
+  separate(fac, into = c("Current Name", "Former Name"), sep = "\\s(DBA|dba|d/b/a)\\s", remove = FALSE) %>%
+  mutate(`Current Name` = trimws(`Current Name`, which = "right")) %>%
+  pivot_longer(cols = c("Current Name", "Former Name"), names_to = "Name Status", values_to = "Facility Name") %>%
+  merge(tidy_503b, by = c("Facility Name", "City", "State")) %>%
+  select(`Facility Name`, City, State, `Country/Area`, `Inspection End Date`, `Program Area`,
+         `CFR/Act Number`, `Short Description`, `Long Description`, `Name Status.x`,
+         initial_outsourcing_registration_date, current_outsourcing_registration_date, date_last_inspection,
+         form483_issued, other_action, intent_to_compound_from_bulk_drug_substance)
+```
+
+```{r}
+tidy_503b %>%
+  filter(!is.na(date_last_inspection)) #%>%
   distinct(`Facility Name`) %>%
   arrange(`Facility Name`)
 ```
 
 ```{r}
-tidy_503b %>%
-  filter(!is.na(date_last_inspection)) %>%
-  distinct(`Facility Name`) %>%
-  arrange(`Facility Name`)
+citations %>%
+  filter(grepl('Stokes', `Firm Name`),
+         State == "NY")
+  filter(City == "Birmingham",
+         State == "AL",
+         `Program Area` == "Drugs")
 ```
-
 
 
 ```{r}
