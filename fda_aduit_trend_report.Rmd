@@ -39,6 +39,14 @@ list_503b <- read_csv("list_503b.csv", col_types = cols(current_outsourcing_regi
     initial_outsourcing_registration_date = col_date(format = "%m/%d/%Y")))
 ```
 
+```{r functions}
+Mode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+```
+
+
 # Description of Datasets
 
 ## Classifications
@@ -308,15 +316,61 @@ false_503B <- citations %>%
          `CFR/Act Number`, `Short Description`, `Long Description`)
 
 false_503B <- false_503B[complete.cases(false_503B), ]
-false_503B$`Compounding Outsourcing Facility` = 1
+false_503B$`Compounding Outsourcing Facility` = 0
 
-tidy_citations <- rbind(true_503B, false_503B)
+tidy_citations <- rbind(true_503B, false_503B) %>%
+  mutate(CFR = gsub("(\\([a-z]))|(\\([0-9]))", "", `CFR/Act Number`))
 ```
 
-Can you merge citations and classifications?
+# Most Common Compliance Issues
+
+Which guidances are most often cited to drug companies in general? Also consider looking at the full citation (subsections and all).
 
 ```{r}
-classifications %>%
-  left_join(citations)
+tidy_citations %>%
+  group_by(CFR) %>%
+  dplyr::summarise(
+    Citations = n(),
+    Description = Mode(`Short Description`)
+  ) %>%
+  arrange(desc(Citations)) %>%
+  head(10)
+```
+
+How about 503B companies?
+
+Why has the regex not extracted all sections trapped in parenthesis?
+
+```{r}
+tidy_citations %>%
+  filter(`Compounding Outsourcing Facility` == 1) %>%
+  group_by(CFR) %>%
+  dplyr::summarise(
+    Citations = n(),
+    Description = Mode(`Short Description`)
+  ) %>%
+  arrange(desc(Citations)) %>%
+  head(10)
+```
+
+What elements of drug manufacturing are the FDA most concerned about?
+ - Perform text mining of all Long Descriptions.
+ - Come up with a list of categories which appear most frequently in the corpus.
+    - End with a graph of the Top X most frequently appearing words / terms, as well as their associated guidance.
+ - Perhaps do some machine learning on the Long Description corpus to be able to associate a citation with a piece of CFR.
+
+# Citation Heatmap of America
+
+Where are the 503B Companies Located? Create a heatmap of America outlining which states have the highest density of 503Bs (potentially relative to capita).
+
+```{r}
+
+```
+
+
+Which states have the most citations per number of facilities in that state? How about per capita?
+
+```{r}
+
 ```
 
