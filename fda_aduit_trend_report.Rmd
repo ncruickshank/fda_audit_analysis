@@ -319,7 +319,9 @@ false_503B <- false_503B[complete.cases(false_503B), ]
 false_503B$`Compounding Outsourcing Facility` = 0
 
 tidy_citations <- rbind(true_503B, false_503B) %>%
-  mutate(CFR = gsub("(\\([a-z]))|(\\([0-9]))", "", `CFR/Act Number`))
+  mutate(CFR = str_extract(`CFR/Act Number`, "21 CFR [0-9]{2,3}.[0-9]+"))
+
+tidy_citations <- tidy_citations[complete.cases(tidy_citations), ]
 ```
 
 # Most Common Compliance Issues
@@ -333,8 +335,22 @@ tidy_citations %>%
     Citations = n(),
     Description = Mode(`Short Description`)
   ) %>%
-  arrange(desc(Citations)) %>%
-  head(10)
+  head(10) %>%
+  ggplot(aes(fct_reorder(Description, Citations), Citations)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = CFR), hjust = "bottom", size = 3) + 
+  coord_flip(ylim = c(0,2350)) + 
+  labs(
+    title = "Most Common 21 CFR 211 Breaches in Pharma",
+    x = "Short Description of Citation",
+    y = "Number of Citations",
+    caption = "Source: fda.gov/inspections-compliance-enforcement-and-criminal-investigations/\n
+    Data compiled from FDA Audits from October 2008 until July 2020."
+  ) + 
+  theme_light() + 
+  theme(
+    plot.title = element_text(hjust = 10)
+  )
 ```
 
 How about 503B companies?
@@ -349,8 +365,23 @@ tidy_citations %>%
     Citations = n(),
     Description = Mode(`Short Description`)
   ) %>%
-  arrange(desc(Citations)) %>%
-  head(10)
+  head(10) %>%
+  ggplot(aes(fct_reorder(Description, Citations), Citations)) + 
+  geom_bar(stat = "identity") + 
+  geom_text(aes(label = CFR), hjust = "bottom", size = 3) + 
+  coord_flip(ylim = c(0,45)) + 
+  labs(
+    title = "Most Common Breaches in 21 CFR 211",
+    subtitle = "At 503B Pharmaceutical Outsourcing Facilities",
+    x = "Short Description of Citation",
+    y = "Number of Citations",
+    caption = "Source: fda.gov/inspections-compliance-enforcement-and-criminal-investigations/"
+  ) + 
+  theme_light() + 
+  theme(
+    plot.title = element_text(hjust = -3.3),
+    plot.subtitle = element_text(hjust = -2.75)
+  )
 ```
 
 What elements of drug manufacturing are the FDA most concerned about?
