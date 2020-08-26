@@ -18,9 +18,11 @@ library(readxl)
 library(tidyverse)
 library(scales)
 library(stringr)
+library(USAboundaries)
+library(usmap)
 ```
 
-```{r load data}
+```{r load data, message=FALSE, warning=FALSE}
 classifications <- read_excel("Inspection_Classification_(10-1-2008_through_7-22-2020).xlsx", 
     col_types = c("text", "text", "text", 
         "text", "text", "text", "date", "text", 
@@ -55,7 +57,7 @@ A dataset of all project areas inspected by the FDA between 10-01-2008 and 07-22
 
 ```{r}
 classifications %>%
-  head(10)
+  head(5)
 ```
 
 
@@ -98,7 +100,7 @@ A data set of all citations given by the FDA during audits generated from FDA Fo
 
 ```{r}
 citations %>%
-  head(10)
+  head(5)
 ```
 
 ## List of 503B Outsourcing Pharmaceutical Companies
@@ -116,24 +118,24 @@ A section of the Inspections Observations data sheet strictly related to Drug Pr
 
 ```{r}
 drug_obs %>%
-  head(10)
+  head()
 ```
 
 Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspection-observations
 More Info: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspectional-observations-and-citations
 
-No. | Column Name           | Class | Description
-----|-----------------------|-------|-------------
-01  | Citation Program Area | chr   | 
-02  | Cire Id               | chr   | 
-03  | Reference Number      | chr   | 
-04  | Short Description     | chr   | 
-05  | Long Description      | chr   | 
-06  | Frequency             | dbl   | 
+## US Population
+
+```{r import state pops, message=FALSE, warning=FALSE}
+us_pop <- read_excel("us_pop.xlsx")
+```
+
+
+Source: https://en.wikipedia.org/wiki/List_of_states_and_territories_of_the_United_States_by_population
 
 # Exploratory Analysis
 
-What proportion of FDA Inspections in 2019 were Center for Drug Evaluation and Radiological Health?
+Proportion of total inspections performed by the Center for Drug Evaluation and Radiological Health (CDER).
 
 ```{r}
 blank_theme <- theme_minimal() + 
@@ -167,24 +169,7 @@ classifications %>%
   theme(axis.text.x = element_blank())
 ```
 
-Of the CDER Inspections, what was the distribution of Inspection Classifications?
-
-What is the distribution of inspections per capita by state? Make a heatmap of America.
-
-```{r}
-classifications %>%
-  filter(Center == "CDER",
-         `Project Area` == "Drug Quality Assurance",
-         !is.na(State)) %>%
-  group_by(State) %>%
-  dplyr::summarise(
-    Inspections = n()
-  )
-```
-
-What is the distribution of Classifications by State?
-
-What months of the year is the agency most likely to perform an inspection? Make a bar graph with fill = classification. Does this distribution look different in the region which Vermont belongs to?
+## Monthly Distribution of FDA Audits
 
 ```{r}
 classifications %>%
@@ -240,15 +225,7 @@ classifications %>%
   )
 ```
 
-Where are most drug inspections performed? Which state has the most drug companies? Make a heatmap of drug manufacturer's per capita.
-
-## Citation Exploration
-
-Merge Citations and List of 503B Companies
-
-Problems to address:
- - Citations has a company named "ImprimisRx NJ" while tidy_503B has a company named "Imprimis NJOF". They need to match.
- - Citations has a company named "Pharmaceutics Labs" while tidy_503B has a company named "Pharamceutic Lab" (no 's' at the end). They need to match.
+## Most Frequent FDA Citations
 
 ```{r tidy data, message=FALSE, warning=FALSE}
 # tidy list_503b
@@ -275,6 +252,7 @@ tidy_503b <- list_503b %>%
 
 tidy_503b <- tidy_503b[complete.cases(tidy_503b), ]
 tidy_503b$`Compounding Outsourcing Facility` = "Yes"
+tidy_503b$State <- trimws(tidy_503b$State, which = "both")
 
 cite_503b <- citations %>%
   filter(`Program Area` == "Drugs") %>%
@@ -324,9 +302,7 @@ tidy_citations <- rbind(true_503B, false_503B) %>%
 tidy_citations <- tidy_citations[complete.cases(tidy_citations), ]
 ```
 
-# Most Common Compliance Issues
-
-Which guidances are most often cited to drug companies in general? Also consider looking at the full citation (subsections and all).
+### In Pharma
 
 ```{r}
 tidy_citations %>%
@@ -337,7 +313,7 @@ tidy_citations %>%
   ) %>%
   head(10) %>%
   ggplot(aes(fct_reorder(Description, Citations), Citations)) + 
-  geom_bar(stat = "identity") + 
+  geom_bar(stat = "identity", fill = "navyblue") + 
   geom_text(aes(label = CFR), hjust = "bottom", size = 3) + 
   coord_flip(ylim = c(0,2350)) + 
   labs(
@@ -353,9 +329,7 @@ tidy_citations %>%
   )
 ```
 
-How about 503B companies?
-
-Why has the regex not extracted all sections trapped in parenthesis?
+### In 503B Pharmaceutical Outsourcing Facilities
 
 ```{r}
 tidy_citations %>%
@@ -367,7 +341,7 @@ tidy_citations %>%
   ) %>%
   head(10) %>%
   ggplot(aes(fct_reorder(Description, Citations), Citations)) + 
-  geom_bar(stat = "identity") + 
+  geom_bar(stat = "identity", fill = "navyblue") + 
   geom_text(aes(label = CFR), hjust = "bottom", size = 3) + 
   coord_flip(ylim = c(0,45)) + 
   labs(
@@ -390,12 +364,44 @@ What elements of drug manufacturing are the FDA most concerned about?
     - End with a graph of the Top X most frequently appearing words / terms, as well as their associated guidance.
  - Perhaps do some machine learning on the Long Description corpus to be able to associate a citation with a piece of CFR.
 
-# Citation Heatmap of America
+## Citation Heatmaps
 
-Where are the 503B Companies Located? Create a heatmap of America outlining which states have the highest density of 503Bs (potentially relative to capita).
+### Location of 503B Pharmaceutical Companies
 
-```{r}
+```{r heatmap 503b, fig.height=6, fig.width=8}
+pop <- us_pop %>%
+  rename(c(
+    "state_name" = "State"
+  )) %>%
+  left_join(state_codes, by = "state_name")
 
+states_503b <- tidy_503b %>%
+  select(`Facility Name`, City, State) %>%
+  rename(c(
+    "state_abbr" = "State"
+  )) %>%
+  group_by(state_abbr) %>%
+  dplyr::summarise(
+    Facilities = n()
+  ) %>%
+  left_join(pop) %>%
+  rename(c(
+    "state" = "state_name"
+  )) %>%
+  mutate(facilities_per_capita = (Facilities / Population))
+
+plot_usmap(data = states_503b, values = "facilities_per_capita", color = "black") + 
+  scale_fill_viridis_c(option = "viridis", name = "Companies\nPer Capita", label = scales::comma) + 
+  labs(
+    title = "Distribution of 503B Pharmaceutical Compancies per capita",
+    subtitle = "VT has the most per capita, although that is only one company (Edge Pharma)."
+    ) + 
+  theme(
+    panel.background = element_rect(color = "black", fill = "lightblue"),
+    legend.position = "right",
+    legend.key.height = unit(2.3, "cm"),
+    legend.text = element_blank()
+    )
 ```
 
 
