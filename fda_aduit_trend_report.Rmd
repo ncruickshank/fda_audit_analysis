@@ -1,5 +1,5 @@
 ---
-title: "FDA Audit Analysis"
+title: "Most Frequent FDA Drug Citations"
 author: "Nick Cruickshank"
 output: rmarkdown::github_document
 ---
@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r load libraries, message=FALSE, warning=FALSE}
+# load libraries
 library(forcats)
 library(lubridate)
 library(qdapRegex)
@@ -22,7 +23,8 @@ library(usmap)
 ```
 
 ```{r load data, message=FALSE, warning=FALSE}
-classifications <- read_excel("Inspection_Classification_(10-1-2008_through_7-22-2020).xlsx", 
+# load data
+audits <- read_excel("Inspection_Classification_(10-1-2008_through_7-22-2020).xlsx", 
     col_types = c("text", "text", "text", 
         "text", "text", "text", "date", "text", 
         "text", "text"))
@@ -35,34 +37,31 @@ citations <- read_excel("Inspection_Citation_(10-1-2008_through_7-22-2020)_0.xls
 drug_obs <- read_csv("fda_drug_observation.csv", 
     col_types = cols(`Cite Id` = col_character()))
 
-list_503b <- read_csv("list_503b.csv", col_types = cols(current_outsourcing_registration_date = col_date(format = "%m/%d/%Y"), 
+list_503b <- read_csv("list_503b.csv", col_types = cols(current_outsourcing_registration_date
+                                                        = col_date(format = "%m/%d/%Y"), 
     date_last_inspection = col_date(format = "%m/%d/%Y"), 
     initial_outsourcing_registration_date = col_date(format = "%m/%d/%Y")))
 ```
 
 ```{r functions}
+# create functions
 Mode <- function(v) {
    uniqv <- unique(v)
    uniqv[which.max(tabulate(match(v, uniqv)))]
 }
 ```
 
-# Description of Datasets
+# Description of Data Sets
 
-## Classifications
+The following data sets were used to evaluate audit and citations patterns from the FDA for drug companies in the United States. All data sets were gathered from fda.gov, which documents each citation and/or audit from 2008 onward. These data sets do not represent 100% of all audits performed or citations given, but they do serve to highlight potential trends in the FDA.  
 
-A dataset of all project areas inspected by the FDA between 10-01-2008 and 07-22-2020 categorized by classification.
+## Audits
 
-```{r}
-classifications %>%
-  head(5)
-```
+Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-classification-database  
+Info on Columns: https://www.accessdata.fda.gov/scripts/inspsearch/searchfields.cfm  
+Key for Districts: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/compliance-actions-and-activities/district-names-and-abbreviations  
 
-
-Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-classification-database
-Info on Columns: https://www.accessdata.fda.gov/scripts/inspsearch/searchfields.cfm
-Key for Districts: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/compliance-actions-and-activities/district-names-and-abbreviations
-
+A data set of all project areas inspected by the FDA between 10-01-2008 and 07-22-2020 categorized by classification, where the possible classifications are as follows: No Action Indicated (NAI), Voluntary Action Indicated (VAI), and Official Action Indicated (OAI). Each row of the data set represents a different functional area inspected within the company. Therefore, the same company may appear more than once during the same Inspection End Date. Further note that not all inspection data is represented here, as data is only posted once final enforcement action has been taken.
 
 No. | Column Name         | Class | Description
 ----|---------------------|-------|-------------
@@ -77,65 +76,105 @@ No. | Column Name         | Class | Description
 09  | Project Area        | chr   | Categorized by corresponding center.
 10  | Classification      | chr   | Inspection classification with regards to compliance status
 
-Centers include the following: 
- - CFSAN: Center for Food Safety and Applied Nutrition
- - CBER: Center for Biologics Evaluation and Research
- - CDER: Center for Drug Evaluation and Radiological Health
- - CVM: Center for Veterinary Medicine
- - CDRH: Office of Regulatory Affairs
- - CTP: Center for Tobacco Product(s)
+```{r}
+# preview audits df
+knitr::kable(head(audits))
+```
 
-Classifications include the following:
- - NAI: No Action Indicated
- - VAI: Voluntary Action Indicated
- - OAI: Official Action Indicated
+```{r}
+# dimensions of the audit df (rows, columns)
+dim(audits)
+```
 
+Centers include the following:   
+ - CFSAN: Center for Food Safety and Applied Nutrition  
+ - CBER: Center for Biologics Evaluation and Research  
+ - CDER: Center for Drug Evaluation and Radiological Health  
+ - CVM: Center for Veterinary Medicine  
+ - CDRH: Office of Regulatory Affairs  
+ - CTP: Center for Tobacco Product(s)  
+  
 ## Citations
 
 Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspection-citation
 
-A data set of all citations given by the FDA during audits generated from FDA Form 483 between 10-01-2008 and 07-22-2008.
+A data set of all citations given by the FDA during audits generated from FDA Form 483 between 10-01-2008 and 07-22-2008. This is the primary data set of interest for this analysis, as it outlines each of the citations given by the FDA during each audit described in the 'audits' df. This includes a short description, long description, and CFR/Act Number which the firm was in breach of during the inspection.
+
+No. | Column Name         | Class | Description
+----|---------------------|-------|-------------
+01  | Firm Name           | chr   | Name of firm inspected
+02  | City                | chr   | City firm is located in
+03  | State               | chr   | State firm is located in
+04  | Country/Area        | chr   | Country firm is located in
+05  | Inspection End Date | date  | Date the inspection was concluded
+06  | Program Area        | chr   | Branch of the FDA performing the inspection
+07  | CFR/Act Number      | chr   | Code of Federal Regulation (CFR) the firm was found to be in breach of
+08  | Short Description   | chr   | Abbreviated description of citation
+09  | Long Description    | chr   | Longer description of citation (doesn't include specifics)
 
 ```{r}
-citations %>%
-  head(5)
+# preview citations df
+knitr::kable(head(citations))
+```
+
+```{r}
+# dimensions of the citations df (rows, columns)
+dim(citations)
 ```
 
 ## List of 503B Outsourcing Pharmaceutical Companies
 
 Source: https://www.fda.gov/drugs/human-drug-compounding/registered-outsourcing-facilities
 
+One limitation of the 'citations' df is that it does not define which subcategory of the drug manufacturing industry the firm belongs to. Specifically, companies like Edge Pharma belong to a division of human drug compounding outsourcing facilities under Section 503B of the Federal Food, Drug, and Cosmetic Act (hereafter simply referred to as a 503B company). These companies are often held to very strict standards by the FDA, and are likely to be subject to a slight variation in where elements of the company the FDA pays attention to. Therefore, the list of currently registered outsourcing facilities was pulled from fda.gov in order to amend the 'citations' df to include an additional Boolean column to answer the question "is the company a 503B?"  
+  
+Of note, there are only 73 companies currently registers as 503B companies with the FDA, with some of those not yet inspected. Additionally, the naming format for the list of 503B companies is noticeably different than in the 'citations' df (for one thing, the Facility Name includes city and state). Another complication is that the data frame only includes _current_ 503B companies, which means that there may be some companies missing from the list whom the FDA shut down between 2008 and now. Despite the limitations, the list of 503B's does provide for minor discrepancies between drug program area citations at large and 503B companies in particular to be detected.
+
+No. | Column Name                                 | Class | Description
+----|---------------------------------------------|-------|-------------
+01  | Facility Name                               | chr   | Name of 503B facility
+02  | initial_outsourcing_registration_date       | date  | Date of initial outsourcing registration
+03  | current_outsourcing_registration_date       | date  | Most recent date of outsourcing registration
+04  | date_last_inspection                        | date  | Most recent FDA inspection
+05  | form483_issued                              | chr   | Brief description of whether the facility would appear on the 'citations' df
+06  | other_action                                | chr   | Aside from issuing Form 483, other actions taken
+07  | intent_to_compound_from_bulk_drug_substance | chr   | The company intends to compound sterile drugs from bulk drug substances (yes or no)
+
 ```{r}
-list_503b %>%
-  head()
+# preview the list_503b df
+knitr::kable(head(list_503b))
 ```
 
-## Drug Observations
-
-A section of the Inspections Observations data sheet strictly related to Drug Products. Lists the frequency of all given observations.
-
 ```{r}
-drug_obs %>%
-  head()
+# dimensions of the list_503b df (rows, columns)
+dim(list_503b)
 ```
-
-Source: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspection-observations
-More Info: https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-references/inspectional-observations-and-citations
 
 ## US Population
 
-```{r import state pops, message=FALSE, warning=FALSE}
-us_pop <- read_excel("us_pop.xlsx")
-```
-
-
 Source: https://en.wikipedia.org/wiki/List_of_states_and_territories_of_the_United_States_by_population
 
-# Exploratory Analysis
+Self explanatory data set. Allows for calculation of per capita rates in the above mentioned data sets.
 
-Proportion of total inspections performed by the Center for Drug Evaluation and Radiological Health (CDER).
+No. | Column Name         | Class | Description
+----|---------------------|-------|-------------
+01  | State               | chr   | Full name of state
+02  | Population          | int   | Most recent census data for that state
 
-```{r}
+```{r import state pops, message=FALSE, warning=FALSE}
+us_pop <- read_excel("us_pop.xlsx")
+
+# preview the us_pop df
+knitr::kable(head(us_pop))
+```
+
+# Audit Analysis
+
+## Distribution of Audits by Center
+
+While the primary data set of interest in this analysis is the 'citations' df, the 'audits' df does provide some brief insight into the FDA Audit patterns. For example, it can be seen easily what proportion of FDA audits are performed by the Center for Drug Evaluation and Radiological Health (CDER), who would be responsible for drug manufacturers. From the following graph, we can see that the CDER audits surprisingly only account for a small fraction of the total audits performed.
+
+```{r fig.height=4, fig.width=5}
 blank_theme <- theme_minimal() + 
   theme(
     axis.title.x = element_blank(),
@@ -146,7 +185,7 @@ blank_theme <- theme_minimal() +
     plot.title = element_text(size = 14, face = "bold")
   )
 
-classifications %>%
+audits %>%
   group_by(Center) %>%
   dplyr::summarise(
     Inspections = n()
@@ -169,8 +208,10 @@ classifications %>%
 
 ## Monthly Distribution of FDA Audits
 
-```{r}
-classifications %>%
+Another potential insight that can be gleamed from the 'audits' df is predicting when the FDA will show up next for an audit. This would be an important measure to define for drug companies, as it would allow for management to know when to be prepared to expect another audit. For the following visual, only audits performed by the CDER in the "Drug Quality Assurance" project area in the Northeastern Branch of the FDA are considered. These filters were applied as they were the most representative of Edge Pharma's interests. From this visual, it can be see that there was no strong pattern in which month of the year the FDA are most likely to perform an audit. They appear to perform the smallest number of audits in the summer months, with the winter months representing the highest number of audits. When looking closer at the proportion of audits performed each month which resulted in a classification of OAI (Official Action Needed), it appears that the months with the greatest proportion were March and August. 
+
+```{r fig.height=5, fig.width=8}
+audits %>%
   filter(Center == "CDER",
          `Project Area` == "Drug Quality Assurance",
          !is.na(State),
@@ -225,6 +266,8 @@ classifications %>%
 
 ## Most Frequent FDA Citations
 
+One of the most important insights that can be extracted from the 'citations' df is the most frequently occurring CFR/Act Numbers and citations (short descriptions) which the FDA are likely to observe at a drug manufacturing company. For Edge Pharma, and 503B companies in general, the question needs to be further specified to just assess 503B companies specifically. Curating the 'citations' df required a surprising amount of data tidying using regular expressions, and even at the end of the tidying when it was time to merge the 'list_503b' into 'citations', there were still some 503b companies which did not appear in the 'citations' df. This is likely due to the clause described in the summary of the 'audits' df, wherein only data from audits with final enforcement performed are included. 
+
 ```{r tidy data, message=FALSE, warning=FALSE}
 # tidy list_503b
 tidy_503b <- list_503b %>%
@@ -239,10 +282,10 @@ tidy_503b <- list_503b %>%
   separate(name, into = c("Current Name", "Formerly Name"), sep = " formerly ", remove = TRUE) %>%
   mutate(`Formerly Name` = gsub("registered as ", "", `Formerly Name`)) %>%
   separate(`Formerly Name`, into = c("Former Name", "c1", "s1"), sep = ", ", remove = FALSE) %>%
-  select(`Current Name`, `Former Name`, city, state, initial_outsourcing_registration_date, current_outsourcing_registration_date,
-         date_last_inspection, form483_issued, other_action, intent_to_compound_from_bulk_drug_substance) %>%
+  select(`Current Name`, `Former Name`, city, state, initial_outsourcing_registration_date,
+         current_outsourcing_registration_date, date_last_inspection, form483_issued,
+         other_action, intent_to_compound_from_bulk_drug_substance) %>%
   rename(c(
-    #"Facility Name" = "Current Name",
     "City" = "city",
     "State" = "state"
   )) %>%
@@ -254,7 +297,8 @@ tidy_503b$State <- trimws(tidy_503b$State, which = "both")
 
 cite_503b <- citations %>%
   filter(`Program Area` == "Drugs") %>%
-  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  # remove LLC or Inc from Firm Name
+  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% 
   mutate(fac = trimws(fac, which = "right")) %>%
   separate(fac, into = c("Current Name", "Former Name"), sep = "\\s(DBA|dba|d/b/a)\\s", remove = FALSE) %>%
   mutate(`Current Name` = trimws(`Current Name`, which = "right")) %>%
@@ -268,7 +312,8 @@ cite_503b <- citations %>%
 true_503B <- citations %>%
   filter(`Program Area` == "Drugs",
          `Country/Area` == "United States") %>%
-  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  # remove LLC or Inc from Firm Name
+  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% 
   mutate(fac = trimws(fac, which = "right")) %>%
   separate(fac, into = c("Current Name", "Former Name"), sep = "\\s(DBA|dba|d/b/a)\\s", remove = FALSE) %>%
   mutate(`Current Name` = trimws(`Current Name`, which = "right")) %>%
@@ -282,7 +327,8 @@ true_503B$`Compounding Outsourcing Facility` = 1
 false_503B <- citations %>%
   filter(`Program Area` == "Drugs",
          `Country/Area` == "United States") %>%
-  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% # remove LLC or Inc from Firm Name
+  # remove LLC or Inc from Firm Name
+  mutate(fac = gsub("[,]? (LLC|Inc\\.|Lp|Ltd|Llc|LTD|LP|PLC|)[\\.]?", " ", `Firm Name`)) %>% 
   mutate(fac = trimws(fac, which = "right")) %>%
   separate(fac, into = c("Current Name", "Former Name"), sep = "\\s(DBA|dba|d/b/a)\\s", remove = FALSE) %>%
   mutate(`Current Name` = trimws(`Current Name`, which = "right")) %>%
@@ -302,7 +348,16 @@ tidy_citations <- tidy_citations[complete.cases(tidy_citations), ]
 
 ### In Pharma
 
-```{r}
+From this visual, it can be seen that the FDA in general places a great emphasis on properly written procedures, specifically as it relates to 21 CFR 211.100, which states the following:  
+
+  Sec. 211.100 Written procedures; deviations.
+  (a) There shall be written procedures for production and process control designed to assure that the drug products have the identity, strength, quality, and purity they purport or are represented to possess. Such procedures shall include all requirements in this subpart. These written procedures, including any changes, shall be drafted, reviewed, and approved by the appropriate organizational units and reviewed and approved by the quality control unit.
+
+  (b) Written production and process control procedures shall be followed in the execution of the various production and process control functions and shall be documented at the time of performance. Any deviation from the written procedures shall be recorded and justified.
+
+From there, the breaches in CFR compliance most frequently observed drop quickly, with the following two citations being "Control of procedures to monitor and validate performance" (21 CFR 211.110) and "Procedures for sterile drug products" (21 CFR 211.113). Overall it appears that the general aspects of a drug manufacturing company with the greatest importance, as determined by the FDA; are written procedures, process control, and proper documentation.
+
+```{r fig.height=5, fig.width=8}
 tidy_citations %>%
   group_by(CFR) %>%
   dplyr::summarise(
@@ -315,7 +370,8 @@ tidy_citations %>%
   geom_text(aes(label = CFR), hjust = "bottom", size = 3) + 
   coord_flip(ylim = c(0,2350)) + 
   labs(
-    title = "Most Common 21 CFR 211 Breaches in Pharma",
+    title = "Most Common 21 CFR 211 Breaches",
+    subtitle = "At Drug Manufacturing Companies",
     x = "Short Description of Citation",
     y = "Number of Citations",
     caption = "Source: fda.gov/inspections-compliance-enforcement-and-criminal-investigations/\n
@@ -323,13 +379,22 @@ tidy_citations %>%
   ) + 
   theme_light() + 
   theme(
-    plot.title = element_text(hjust = 10)
+    plot.title = element_text(hjust = 0)
   )
 ```
 
 ### In 503B Pharmaceutical Outsourcing Facilities
 
-```{r}
+The general trends observed in the previous visualization are also displayed here, if in a somewhat altered way. For 503B companies, the most frequently cited observation by the FDA was "Procedures for sterile drug products" (21 CFR 211.113). This chapter of the Code of Federal Regulation states the following: 
+
+  Sec. 211.113 Control of microbiological contamination.
+  (a) Appropriate written procedures, designed to prevent objectionable microorganisms in drug products not required to be sterile, shall be established and followed.
+
+  (b) Appropriate written procedures, designed to prevent microbiological contamination of drug products purporting to be sterile, shall be established and followed. Such procedures shall include validation of all aseptic and sterilization processes.
+
+In addition to the values outlined for the previous visualization (written procedures and process control), the FDA appears to be concerned with the control of microbial contaminants in sterile products (which makes sense in the context of the 503B industry). 
+
+```{r fig.height=5, fig.width=8}
 tidy_citations %>%
   filter(`Compounding Outsourcing Facility` == 1) %>%
   group_by(CFR) %>%
@@ -351,20 +416,14 @@ tidy_citations %>%
   ) + 
   theme_light() + 
   theme(
-    plot.title = element_text(hjust = -3.3),
-    plot.subtitle = element_text(hjust = -2.75)
+    plot.title = element_text(hjust = 0),
+    plot.subtitle = element_text(hjust = 0)
   )
 ```
 
-What elements of drug manufacturing are the FDA most concerned about?
- - Perform text mining of all Long Descriptions.
- - Come up with a list of categories which appear most frequently in the corpus.
-    - End with a graph of the Top X most frequently appearing words / terms, as well as their associated guidance.
- - Perhaps do some machine learning on the Long Description corpus to be able to associate a citation with a piece of CFR.
+## Heatmap of 503B Companies
 
-## Citation Heatmaps
-
-### Location of 503B Pharmaceutical Companies
+As a final bit of auxiliary analysis, the following graph depicts which states have the highest concentration of 503B companies per capita. While Vermont by far and away has the highest per capita rate, this is primary due to the extremely low population of the state (as there is only one 503B company registered).
 
 ```{r heatmap 503b, fig.height=6, fig.width=8}
 pop <- us_pop %>%
@@ -391,7 +450,7 @@ states_503b <- tidy_503b %>%
 plot_usmap(data = states_503b, values = "facilities_per_capita", color = "black") + 
   scale_fill_viridis_c(option = "viridis", name = "Companies\nPer Capita", label = scales::comma) + 
   labs(
-    title = "Distribution of 503B Pharmaceutical Compancies per capita",
+    title = "Distribution of 503B Pharmaceutical Companies per capita",
     subtitle = "VT has the most per capita, although that is only one company (Edge Pharma)."
     ) + 
   theme(
@@ -401,11 +460,3 @@ plot_usmap(data = states_503b, values = "facilities_per_capita", color = "black"
     legend.text = element_blank()
     )
 ```
-
-
-Which states have the most citations per number of facilities in that state? How about per capita?
-
-```{r}
-
-```
-
