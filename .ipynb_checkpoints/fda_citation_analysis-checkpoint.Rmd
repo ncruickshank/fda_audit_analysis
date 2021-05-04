@@ -1,0 +1,32 @@
+---
+title: "FDA Citations Analysis"
+author: "Nick Cruickshank"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# libraries
+library(httr)
+library(janitor)
+library(readxl)
+```
+
+```{r}
+# data
+url1 <- "https://www.fda.gov/media/107480/download"
+
+GET(url1, write_disk(tf <- tempfile(fileext = ".xlsx")))
+
+fda <- read_excel(tf) %>% janitor::clean_names()
+unlink(tf)
+```
+
+```{r}
+fda
+```
+
